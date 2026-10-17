@@ -3,6 +3,44 @@
 #include "delay.h"
 #include "debug.h"
 #include "bb_spi.h"
+#include "kbdef.h"
+
+#ifndef RF_REPORT_KEY_COUNT
+#    define RF_REPORT_KEY_COUNT 5
+#endif
+#ifndef RF_NKRO_BITMAP_BYTES
+#    define RF_NKRO_BITMAP_BYTES 20
+#endif
+#ifndef RF_REPORT_HAS_ACTIVITY_BYTE
+#    define RF_REPORT_HAS_ACTIVITY_BYTE 1
+#endif
+#ifndef RF_REPORT_KRO_PHANTOM_BLANKING
+#    define RF_REPORT_KRO_PHANTOM_BLANKING 1
+#endif
+#ifndef RF_USB_MODE_FRAME_COUNT
+#    define RF_USB_MODE_FRAME_COUNT 2
+#endif
+#ifndef RF_STATUS_READBACK
+#    define RF_STATUS_READBACK 1
+#endif
+#ifndef RF_INIT_BT_NAMES
+#    define RF_INIT_BT_NAMES 1
+#endif
+#ifndef RF_LINK_FRAME_COUNT
+#    define RF_LINK_FRAME_COUNT 2
+#endif
+#ifndef RF_EXTRA_FIXED_BYTE8
+#    define RF_EXTRA_FIXED_BYTE8 0
+#endif
+#ifndef RF_INIT_SEND_LINK
+#    define RF_INIT_SEND_LINK 1
+#endif
+
+// K530: cmd 0x05 media frame uses this layout (byte 8 = 1, usage in
+// bytes 9..10). Other boards keep their own layout.
+#ifndef RF_EXTRA_FRAME_MEDIA_LAYOUT
+#    define RF_EXTRA_FRAME_MEDIA_LAYOUT 0
+#endif
 
 #define MAGIC_BYTE 0xaa
 #define CMD_REPORT 0x02
@@ -65,7 +103,9 @@ uint8_t checksum(uint8_t *data, int len);
 
 void rf_init()
 {
+#if RF_STATUS_READBACK
     uint8_t status_bytes[2];
+#endif
 
     delay_ms(255);
     delay_ms(255);
@@ -74,6 +114,7 @@ void rf_init()
     delay_ms(255);
     delay_ms(255);
 
+#if RF_STATUS_READBACK
     for (uint8_t tries = 10; tries > 0; tries--) {
         rf_wake_nudge();
         delay_ms(tries);
@@ -81,20 +122,27 @@ void rf_init()
             break;
         }
     }
+#endif
 
+#if RF_INIT_BT_NAMES
     rf_set_bt_name(RF_SET_NAME_BT5, rf_bt5_name);
     delay_ms(50);
     rf_set_bt_name(RF_SET_NAME_BT3, rf_bt3_name);
     delay_ms(5);
+#endif
 
+#if RF_INIT_SEND_LINK
     rf_set_link(RF_MODE_2_4G);
+#endif
 }
 
 void rf_reassert_link(rf_mode_t link)
 {
     rf_set_link_mode((uint8_t)link, 0);
+#if RF_LINK_FRAME_COUNT > 1
     delay_ms(20);
     rf_set_link_mode((uint8_t)link, 0);
+#endif
 }
 
 // Wipe all BT bonds / factory reset. Destructive: tears down BLE advertising
@@ -113,9 +161,9 @@ void rf_factory_reset_bonds(void)
     delay_ms(200);
 }
 
-uint8_t kro6buffer[6];
+uint8_t kro6buffer[RF_REPORT_KEY_COUNT + 1];
 
-static uint8_t rf_pending_buf[6];
+static uint8_t rf_pending_buf[RF_REPORT_KEY_COUNT + 1];
 static bool    rf_pending;
 
 void rf_send_report(__xdata report_keyboard_t *report)
@@ -126,6 +174,9 @@ void rf_send_report(__xdata report_keyboard_t *report)
     rf_pending_buf[3] = report->raw[4];
     rf_pending_buf[4] = report->raw[5];
     rf_pending_buf[5] = report->raw[6];
+#if RF_REPORT_KEY_COUNT == 6
+    rf_pending_buf[6] = report->raw[7];
+#endif
     rf_pending        = true;
 
     rf_send_pending_flush();
@@ -149,7 +200,7 @@ void rf_send_nkro(__xdata report_nkro_t *report)
     }
 
     if (blank) {
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < RF_REPORT_KEY_COUNT + 1; i++) {
             kro6buffer[i] = 0;
         }
         rf_send_kro_report(kro6buffer);
@@ -207,6 +258,10 @@ static uint8_t  supervisor_was_paired = 0;
 
 void rf_link_supervisor(keyboard_state_t *keyboard)
 {
+#if !RF_STATUS_READBACK
+    (void)keyboard;
+    return;
+#else
     supervisor_ticks++;
     if (supervisor_ticks < RF_SUPERVISOR_TICK_INTERVAL) {
         return;
@@ -233,21 +288,26 @@ void rf_link_supervisor(keyboard_state_t *keyboard)
     if ((!keyboard->connected && !keyboard->paired) || (keyboard->rf_link != commanded_link)) {
         rf_set_link_mode(commanded_link, 0);
     }
+#endif
 }
 
 void rf_set_link(rf_mode_t link)
 {
     commanded_link = (uint8_t)link;
     rf_set_link_mode(link, 0);
+#if RF_LINK_FRAME_COUNT > 1
     delay_ms(20);
     rf_set_link_mode(link, 0);
+#endif
 }
 
 void rf_apply_usb_mode(void)
 {
     rf_cmd_06(1);
+#if RF_USB_MODE_FRAME_COUNT > 1
     delay_ms(20);
     rf_cmd_06(1);
+#endif
 }
 
 static bool lazy_init_pending;
@@ -265,9 +325,14 @@ void rf_blanking_tick(void)
         return;
     }
 
+#if RF_REPORT_KRO_PHANTOM_BLANKING
     static uint8_t phantom_buf[6] = {0, 0x01, 0, 0, 0, 0};
     static uint8_t blank_buf[6]   = {0, 0, 0, 0, 0, 0};
     uint8_t       *buf            = ((blanking_pending & 1) == 0) ? phantom_buf : blank_buf;
+#else
+    static uint8_t blank_buf[RF_REPORT_KEY_COUNT + 1] = {0};
+    uint8_t       *buf = blank_buf;
+#endif
 
     blanking_pending--;
 
@@ -284,6 +349,12 @@ void rf_set_link_pairing(rf_mode_t link, __xdata keyboard_state_t *keyboard)
 
     rf_set_link_mode(link, 1);
 
+#if !RF_STATUS_READBACK
+    (void)keyboard;
+    pairing_paired_now = 0;
+    pairing_window_polls = 0;
+    return;
+#else
     pairing_paired_now = 0;
     delay_ms(100);
     for (uint8_t tries = 10; tries > 0; tries--) {
@@ -310,6 +381,7 @@ void rf_set_link_pairing(rf_mode_t link, __xdata keyboard_state_t *keyboard)
     } else {
         pairing_window_polls = RF_PAIRING_WINDOW_POLLS;
     }
+#endif
 }
 
 bool rf_get_status(uint8_t status_bytes[2])
@@ -346,6 +418,7 @@ void rf_fetch_4()
 
     bb_spi_recv(rf_tx_buf, 4);
 }
+
 // Never nudge between attempts: it reuses rf_tx_buf and corrupts the in-flight report.
 #define RF_SEND_MAX_ATTEMPTS 5
 
@@ -381,18 +454,25 @@ static void rf_kro_post_send_blanking(bool curr_active)
     if (blanking_active) {
         return; // inside rf_blanking_tick; the tick owns the counter
     }
+#if RF_REPORT_KRO_PHANTOM_BLANKING
     if (curr_active) {
         blanking_pending = 0; // a press cancels any pending blanking
     } else if (kro_prev_active) {
         blanking_pending = BLANKING_COUNT_AFTER_RELEASE;
     }
+#else
+    // Nothing to blank: the release report is already empty, and extra frames
+    // would only stall the bit-banged SPI.
+    (void)curr_active;
+    blanking_pending = 0;
+#endif
 }
 
 bool rf_send_kro_report(uint8_t *buffer)
 {
     const uint8_t len = 32;
 
-    static uint8_t empty_buf[6] = {0, 0, 0, 0, 0, 0};
+    static uint8_t empty_buf[RF_REPORT_KEY_COUNT + 1] = {0};
     if (lazy_init_pending) {
         lazy_init_pending = false;
         buffer            = empty_buf;
@@ -402,20 +482,24 @@ bool rf_send_kro_report(uint8_t *buffer)
     rf_tx_buf[1] = len - 3;
     rf_tx_buf[2] = CMD_REPORT;
     rf_tx_buf[3] = buffer[0];
-    rf_tx_buf[4] = buffer[1];
-    rf_tx_buf[5] = buffer[2];
-    rf_tx_buf[6] = buffer[3];
-    rf_tx_buf[7] = buffer[4];
-    rf_tx_buf[8] = buffer[5];
+    for (uint8_t i = 1; i <= RF_REPORT_KEY_COUNT; i++) {
+        rf_tx_buf[3 + i] = buffer[i];
+    }
 
-    uint8_t active = 0;
-    for (int i = 0; i < 6; i++) {
+    uint8_t active = (buffer[0] != 0);
+    for (uint8_t i = 1; i <= RF_REPORT_KEY_COUNT; i++) {
         if (buffer[i] != 0) {
             active = 1;
             break;
         }
     }
+
+#if RF_REPORT_KEY_COUNT == 6
+    // The K530 dongle puts the 6th key in byte 9 instead of the activity byte.
+    rf_tx_buf[9] = buffer[6];
+#else
     rf_tx_buf[9] = compute_byte9(active);
+#endif
 
     for (int i = 10; i < 31; i++) {
         rf_tx_buf[i] = 0x00;
@@ -443,39 +527,31 @@ void rf_send_nkro_report(uint8_t mods, __xdata uint8_t *nkro_buffer)
     rf_tx_buf[5] = 0x00;
     rf_tx_buf[6] = 0x00;
     rf_tx_buf[7] = 0x00;
-    rf_tx_buf[8] = 0x00;
+    rf_tx_buf[8] = RF_EXTRA_FIXED_BYTE8 ? 0x01 : 0x00;
 
     uint8_t active = (mods != 0);
     if (!active) {
-        for (int i = 0; i < 20; i++) {
+        for (uint8_t i = 0; i < RF_NKRO_BITMAP_BYTES; i++) {
             if (nkro_buffer[i] != 0) {
                 active = 1;
                 break;
             }
         }
     }
+ #if RF_REPORT_HAS_ACTIVITY_BYTE
     rf_tx_buf[9] = compute_byte9(active);
+ #else
+    rf_tx_buf[9] = 0;
+ #endif
 
-    rf_tx_buf[10] = nkro_buffer[0];
-    rf_tx_buf[11] = nkro_buffer[1];
-    rf_tx_buf[12] = nkro_buffer[2];
-    rf_tx_buf[13] = nkro_buffer[3];
-    rf_tx_buf[14] = nkro_buffer[4];
-    rf_tx_buf[15] = nkro_buffer[5];
-    rf_tx_buf[16] = nkro_buffer[6];
-    rf_tx_buf[17] = nkro_buffer[7];
-    rf_tx_buf[18] = nkro_buffer[8];
-    rf_tx_buf[19] = nkro_buffer[9];
-    rf_tx_buf[20] = nkro_buffer[10];
-    rf_tx_buf[21] = nkro_buffer[11];
-    rf_tx_buf[22] = nkro_buffer[12];
-    rf_tx_buf[23] = nkro_buffer[13];
-    rf_tx_buf[24] = nkro_buffer[14];
-    rf_tx_buf[25] = nkro_buffer[15];
-    rf_tx_buf[26] = nkro_buffer[16];
-    rf_tx_buf[27] = nkro_buffer[17];
-    rf_tx_buf[28] = nkro_buffer[18];
-    rf_tx_buf[29] = nkro_buffer[19];
+    for (uint8_t i = 0; i < RF_NKRO_BITMAP_BYTES; i++) {
+        rf_tx_buf[10 + i] = nkro_buffer[i];
+    }
+#if RF_NKRO_BITMAP_BYTES < 20
+    for (uint8_t i = RF_NKRO_BITMAP_BYTES; i < 20; i++) {
+        rf_tx_buf[10 + i] = 0;
+    }
+#endif
 
     rf_tx_buf[30] = 0x00;
 
@@ -527,11 +603,20 @@ void rf_send_consumer_system(uint16_t consumer, uint16_t system)
     rf_tx_buf[5]  = 0x00;
     rf_tx_buf[6]  = 0x00;
     rf_tx_buf[7]  = 0x00;
+#if RF_EXTRA_FRAME_MEDIA_LAYOUT
+    // Byte 8 = 1, usage in bytes 9..10, bytes 11..12 = 0.
+    rf_tx_buf[8]  = 0x01;
+    rf_tx_buf[9]  = consumer ? (consumer & 0xff) : (system & 0xff);
+    rf_tx_buf[10] = consumer ? (consumer >> 8)   : (system >> 8);
+    rf_tx_buf[11] = 0x00;
+    rf_tx_buf[12] = 0x00;
+#else
     rf_tx_buf[8]  = 0x00;
     rf_tx_buf[9]  = consumer & 0xff;
     rf_tx_buf[10] = consumer >> 8;
     rf_tx_buf[11] = system & 0xff;
     rf_tx_buf[12] = system >> 8;
+#endif
 
     rf_tx_buf[len - 1] = checksum(rf_tx_buf, len - 1);
 

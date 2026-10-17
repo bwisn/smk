@@ -17,6 +17,12 @@ void tick_dispatch(void)
     ticks++;
 }
 
+// The example does not use the slot length.
+void tick_time_advance(uint16_t us)
+{
+    (void)us;
+}
+
 void main(void)
 {
     ldo_init();

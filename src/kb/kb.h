@@ -12,3 +12,5 @@ void kb_send_extra(__xdata report_extra_t *report);
 bool kb_process_record(uint16_t keycode, bool key_pressed);
 void kb_update_switches();
 void kb_update();
+
+void kb_restore_rf_link();

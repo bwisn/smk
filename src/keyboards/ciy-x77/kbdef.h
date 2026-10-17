@@ -7,6 +7,13 @@
 #define MATRIX_ROWS 6
 #define MATRIX_COLS 18
 
+#ifndef LED_SUBFRAME_US
+#define LED_SUBFRAME_US 250
+#endif
+#ifndef MATRIX_SCAN_SLOT_US
+#define MATRIX_SCAN_SLOT_US 1000
+#endif
+
 // row pin bits, read on SFR page 1, active low. P5.6 and P5.7 are the EEPROM bus.
 #define KB_R0_P5_0 _P5_0
 #define KB_R1_P5_1 _P5_1

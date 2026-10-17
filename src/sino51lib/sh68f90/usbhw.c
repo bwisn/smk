@@ -7,6 +7,8 @@
 #endif
 #include <stdint.h>
 
+// The host reads the endpoint at its polling interval; overwriting an unread
+// report loses a key release.
 #define EP_IN_DRAIN_TRIES 255
 
 static void set_ep1_in_buffer(uint8_t *src, uint8_t len)

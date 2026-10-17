@@ -53,17 +53,6 @@ static void restore_settings(void)
     indicators_validate_settings();
 }
 
-#ifdef RF_ENABLED
-static void restore_rf_link(void)
-{
-    rf_set_link((rf_mode_t)user_settings.rf_link);
-
-    keyboard_state.rf_link   = user_settings.rf_link;
-    keyboard_state.connected = 1;
-    keyboard_state.paired    = 1;
-}
-#endif
-
 void main(void)
 {
     init();
@@ -87,7 +76,7 @@ void main(void)
     indicators_start();
 
 #ifdef RF_ENABLED
-    restore_rf_link();
+    kb_restore_rf_link();
 #endif
 
     sleep_init(); // needs the board's GPIO and RF up

@@ -1,11 +1,9 @@
 #pragma once
 
+#include <stdint.h>
+
 // The keyboard's realtime work, driven by the platform's periodic tick.
-//
-// One hardware timer has to serve two jobs that can't overlap: sweeping the key
-// matrix, and emitting LED PWM subframes (LED drive current couples into the row
-// sense). So ticks alternate between them, and this is where that interleave is
-// decided.
+// The tick alternates between matrix scans and LED PWM subframes.
 
 void tick_init(void);
 
@@ -13,3 +11,9 @@ void tick_dispatch(void);
 
 void tick_pause(void);
 void tick_resume(void);
+
+// Milliseconds since tick start. The count uses slot lengths, so it follows
+// wall time. The ISR writes the low byte; the reader tracks the high byte.
+uint16_t tick_millis(void);
+
+void tick_time_advance(uint16_t us);

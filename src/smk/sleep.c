@@ -13,6 +13,7 @@ typedef int sleep_disabled_placeholder_t;
 #        include "rf_controller.h"
 #        include "keyboard.h"
 #        include "delay.h"
+#        include "kbdef.h"
 #    endif
 
 #    include <stdbool.h>
@@ -64,15 +65,19 @@ static bool sleep_due(user_sleep_mode_t mode)
 {
     switch (mode) {
         case USER_SLEEP_RF:
-            return sleep_requested;
         case USER_SLEEP_USB:
-            return usb_suspended;
+            // Sleep on the idle timeout. Sleeping on USB suspend would lose the
+            // key press that wakes the board.
+            return sleep_requested;
         default:
             return false;
     }
 }
 
 #    ifdef RF_ENABLED
+#        if !defined(RF_STATUS_READBACK)
+#            define RF_STATUS_READBACK 1
+#        endif
 #        define RF_RESYNC_TRIES 10
 
 static void rf_resync_after_wake(void)
@@ -106,9 +111,11 @@ void sleep_task(void)
     const powerdown_mode_t powerdown = (mode == USER_SLEEP_USB) ? POWERDOWN_KEEP_USB_ALIVE : POWERDOWN_RELEASE_USB;
 
 #    ifdef RF_ENABLED
+#        if RF_STATUS_READBACK
     if (powerdown == POWERDOWN_RELEASE_USB) {
         rf_wake();
     }
+#        endif
 #    endif
 
     tick_pause();
@@ -122,9 +129,11 @@ void sleep_task(void)
     tick_resume();
 
 #    ifdef RF_ENABLED
+#        if RF_STATUS_READBACK
     if (powerdown == POWERDOWN_RELEASE_USB) {
         rf_resync_after_wake();
     }
+#        endif
 #    endif
 
     sleep_note_activity();

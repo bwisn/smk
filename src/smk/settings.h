@@ -21,10 +21,12 @@ bool settings_load(void);
 
 void settings_save(void);
 
+// Mark the settings for a save after a few idle matrix scans.
 void settings_mark_dirty(void);
 
 void settings_task(void);
 
+// Board hooks around the flash write; the board turns its LEDs off here.
 void settings_save_pre(void);
 void settings_save_post(void);
 

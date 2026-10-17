@@ -5,7 +5,6 @@ src_sh68f89 = files(
     'peripherals.c',
     'power.c',
     'extint.c',
-    'systick.c',
 ) + src_pca
 
 if get_option('buildtype') == 'debug'
@@ -17,7 +16,6 @@ platforms += {
         'dir' : meson.current_source_dir(),
         'example_core' : files('clock.c', 'peripherals.c'),
         'example_usbhw' : files('usbhw.c'),
-        'example_systick' : files('systick.c'),
         'example_power' : files('power.c', 'extint.c'),
         'src' : src_sh68f89,
         'flash_size' : 65536,

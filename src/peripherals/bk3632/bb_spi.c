@@ -10,6 +10,14 @@ uint8_t bb_spi_xfer_byte(uint8_t data);
 #define RF_BB_SPI_ACK_POLL_MAX 50
 #define RF_BB_SPI_ACK_POLL_US  3
 
+#ifndef RF_BB_SPI_HAS_ACK
+#    define RF_BB_SPI_HAS_ACK 1
+#endif
+
+#ifndef RF_BB_SPI_CS_LEAD_US
+#    define RF_BB_SPI_CS_LEAD_US 0
+#endif
+
 #define MOT_DRIVE_LOW()                     \
     do {                                    \
         RF_BB_SPI_MOT = 0;                  \
@@ -38,6 +46,7 @@ static void bb_spi_burst(uint8_t *data, int len, bool lock)
     MOT_DRIVE_LOW();
     delay_us(3); // wakeup
     CS_DRIVE_LOW();
+    delay_us(RF_BB_SPI_CS_LEAD_US);
     if (lock) {
         __critical
         {
@@ -59,6 +68,10 @@ static void bb_spi_burst(uint8_t *data, int len, bool lock)
 
 bool bb_spi_xfer(uint8_t *data, int len)
 {
+#if !RF_BB_SPI_HAS_ACK
+    bb_spi_burst(data, len, false);
+    return true;
+#else
     bool ack_initial = RF_BB_SPI_ACK;
 
     bb_spi_burst(data, len, false);
@@ -71,6 +84,7 @@ bool bb_spi_xfer(uint8_t *data, int len)
     }
 
     return false;
+#endif
 }
 
 void bb_spi_recv(uint8_t *data, int len)
@@ -82,9 +96,9 @@ uint8_t bb_spi_xfer_byte(uint8_t data)
 {
     uint8_t recv = 0;
 
-    // Per-bit open-drain bit-bang: SCK low, set MOSI, sample MISO, release SCK
-    // high. MISO is sampled while SCK is LOW - the slave latches it on the SCK
-    // falling edge, so the master must read before releasing SCK high again.
+    // Open-drain bit-bang: drive SCK low, set MOSI, sample MISO, then release
+    // SCK high. The slave latches MISO on the SCK falling edge, so read it
+    // before SCK goes high.
     for (uint8_t i = 0; i < 8; i++) {
         recv = recv << 1;
 

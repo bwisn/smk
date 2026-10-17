@@ -7,6 +7,13 @@
 #define MATRIX_ROWS 6
 #define MATRIX_COLS 19
 
+#ifndef LED_SUBFRAME_US
+#define LED_SUBFRAME_US 620
+#endif
+#ifndef MATRIX_SCAN_SLOT_US
+#define MATRIX_SCAN_SLOT_US 8000
+#endif
+
 // row pin bits, read on SFR page 0, active low.
 #define KB_R0_P2_1 _P2_1
 #define KB_R1_P2_2 _P2_2

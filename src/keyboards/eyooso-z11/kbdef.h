@@ -3,6 +3,10 @@
 #include "sh68f90.h"
 #include "keycodes.h"
 
+#ifndef MATRIX_SCAN_SLOT_US
+#define MATRIX_SCAN_SLOT_US 500
+#endif
+
 #define MATRIX_ROWS 5
 #define MATRIX_COLS 14
 

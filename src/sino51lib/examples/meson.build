@@ -46,9 +46,8 @@ sino51lib_examples = [
     {
         'name' : 'systick_tick',
         'parts' : ['sh68f90', 'sh68f89', 'sh68f881'],
-        'src' : files('systick_tick/main.c') + src_startup + src_delay + src_ldo,
-        'extra' : 'example_systick',
-        'args' : ['-I' + meson.current_source_dir() / 'systick_tick'],
+        'src' : files('systick_tick/main.c') + files('../../smk/systick.c') + src_startup + src_delay + src_ldo,
+        'args' : ['-I' + meson.current_source_dir() / 'systick_tick', '-I' + meson.current_source_dir() / '../../smk'],
     },
     {
         'name' : 'bb_i2c_probe',

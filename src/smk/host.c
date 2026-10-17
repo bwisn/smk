@@ -2,6 +2,8 @@
 #include "kb.h"
 #include "keyboard.h"
 #include "usb.h"
+#include "keycodes.h"
+#include "report.h"
 
 static uint16_t last_system_usage;
 static uint16_t last_consumer_usage;
@@ -45,4 +47,19 @@ void host_consumer_send(uint16_t usage)
     last_consumer_usage = usage;
 
     host_extra_send(REPORT_ID_CONSUMER, usage);
+}
+
+void host_keycode_send(uint16_t keycode, bool pressed)
+{
+    if (IS_CONSUMER_KEYCODE(keycode)) {
+        host_consumer_send(pressed ? keycode_to_consumer((uint8_t)keycode) : 0);
+        return;
+    }
+
+    if (pressed) {
+        add_key((uint8_t)keycode);
+    } else {
+        del_key((uint8_t)keycode);
+    }
+    send_keyboard_report();
 }
